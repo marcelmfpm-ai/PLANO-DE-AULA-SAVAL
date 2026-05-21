@@ -51,7 +51,7 @@
 <body>
 <header>
   <h1>Painel de Controle - Planos de Aula / SAVAL</h1>
-  <div class="subtitle">Leitura automática da planilha Excel localizada na mesma pasta deste HTML. O campo Plano é a junção da coluna B + coluna C, por exemplo: M2.1, M3.7. A coluna M é usada para identificar envio ao SAVAL.</div>
+  <div class="subtitle" id="ultimaAtualizacao">Aguardando carregamento...</div>
 </header>
 <div class="wrap">
   <div id="status" class="status">Carregando planilha...</div>
@@ -216,6 +216,14 @@ async function loadExcel() {
     document.getElementById('fMod').innerHTML = '<option value="TODOS">Todos</option>' + mods.map(m => `<option value="${m}">${m}</option>`).join('');
     applyFilters();
     status.textContent = `Planilha carregada com sucesso. Registros encontrados: ${DATA.length}.`;
+    const agora = new Date();
+    const dia = String(agora.getDate()).padStart(2,'0');
+    const mes = String(agora.getMonth()+1).padStart(2,'0');
+    const ano = agora.getFullYear();
+    const h = String(agora.getHours()).padStart(2,'0');
+    const min = String(agora.getMinutes()).padStart(2,'0');
+    const seg = String(agora.getSeconds()).padStart(2,'0');
+    document.getElementById('ultimaAtualizacao').textContent = `Última Atualização: ${dia}/${mes}/${ano} às ${h}:${min}:${seg}`;
   } catch (e) {
     console.error(e);
     DATA = [];
