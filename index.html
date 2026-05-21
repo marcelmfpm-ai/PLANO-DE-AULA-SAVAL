@@ -137,15 +137,7 @@ const TURMAS = ['EPF','DPF','PPF','PCF'];
 function cell(row, i) { return row && row[i] !== undefined && row[i] !== null ? String(row[i]).trim() : ''; }
 function isBlankRow(row) { return !row || row.every(v => String(v ?? '').trim() === ''); }
 function unique(arr) { return [...new Set(arr.filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'pt-BR',{numeric:true})); }
-function normalizeDate(v) {
-  const s = String(v || '').trim();
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (m) {
-    const year = m[3].length === 2 ? '20' + m[3] : m[3];
-    return `${m[2].padStart(2,'0')}/${m[1].padStart(2,'0')}/${year}`;
-  }
-  return s;
-}
+function normalizeDate(v) { return String(v || '').trim(); }
 function makeCodigo(mod, unid) {
   mod = String(mod || '').trim(); unid = String(unid || '').trim();
   if (!mod && !unid) return '';
@@ -243,37 +235,8 @@ function getFiltered() {
 function applyFilters() { const rows = getFiltered(); updateKpis(rows); renderTable(rows); renderDateChart(rows); renderTurmaChart(rows); }
 function resetFilters() { document.getElementById('fTurma').value='TODAS'; document.getElementById('fSaval').value='TODOS'; document.getElementById('fBusca').value=''; document.getElementById('fMod').value='TODOS'; applyFilters(); }
 function updateKpis(rows) { const total=rows.length, enviados=rows.filter(r=>r.enviado).length, pend=total-enviados; document.getElementById('kTotal').textContent=total; document.getElementById('kEnv').textContent=enviados; document.getElementById('kPend').textContent=pend; document.getElementById('kPerc').textContent=total?Math.round(enviados/total*100)+'%':'0%'; }
-function cmpStyle(pdVal, paVal) {
-  const pd = parseFloat(pdVal);
-  const pa = parseFloat(paVal);
-  if (isNaN(pd) || isNaN(pa)) return '';
-  if (pa < pd) return 'color:#22c55e;font-weight:800;';
-  if (pa > pd) return 'color:#ef4444;font-weight:800;';
-  return '';
-}
 function renderTable(rows) {
-  document.getElementById('tbody').innerHTML = rows.map(r => {
-    const sProfPA = cmpStyle(r.prof_pd, r.prof_pa);
-    const sMonPA  = cmpStyle(r.mon_pd,  r.mon_pa);
-    const sAuxPA  = cmpStyle(r.aux_pd,  r.aux_pa);
-    const sViatPA = cmpStyle(r.viat_pd, r.viat_pa);
-    return `<tr>
-      <td><b>${r.turma}</b></td>
-      <td><b>${r.codigo}</b></td>
-      <td>${r.mod}</td>
-      <td>${r.unid}</td>
-      <td>${r.enviado ? '<span class="tag ok">Enviado</span>' : '<span class="tag no">Pendente</span>'}</td>
-      <td>${r.saval || '-'}</td>
-      <td>${r.prof_pd || 0}</td>
-      <td>${r.mon_pd || 0}</td>
-      <td>${r.aux_pd || 0}</td>
-      <td>${r.viat_pd || '-'}</td>
-      <td style="${sProfPA}">${r.prof_pa || 0}</td>
-      <td style="${sMonPA}">${r.mon_pa  || 0}</td>
-      <td style="${sAuxPA}">${r.aux_pa  || 0}</td>
-      <td style="${sViatPA}">${r.viat_pa || '-'}</td>
-    </tr>`;
-  }).join('');
+  document.getElementById('tbody').innerHTML = rows.map(r => `<tr><td><b>${r.turma}</b></td><td><b>${r.codigo}</b></td><td>${r.mod}</td><td>${r.unid}</td><td>${r.enviado ? '<span class="tag ok">Enviado</span>' : '<span class="tag no">Pendente</span>'}</td><td>${r.saval || '-'}</td><td>${r.prof_pd || 0}</td><td>${r.mon_pd || 0}</td><td>${r.aux_pd || 0}</td><td>${r.viat_pd || '-'}</td><td>${r.prof_pa || 0}</td><td>${r.mon_pa || 0}</td><td>${r.aux_pa || 0}</td><td>${r.viat_pa || '-'}</td></tr>`).join('');
 }
 function renderBars(targetId, items) {
   const el = document.getElementById(targetId);
