@@ -137,7 +137,17 @@ const TURMAS = ['EPF','DPF','PPF','PCF'];
 function cell(row, i) { return row && row[i] !== undefined && row[i] !== null ? String(row[i]).trim() : ''; }
 function isBlankRow(row) { return !row || row.every(v => String(v ?? '').trim() === ''); }
 function unique(arr) { return [...new Set(arr.filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'pt-BR',{numeric:true})); }
-function normalizeDate(v) { return String(v || '').trim(); }
+function normalizeDate(v) {
+  const s = String(v || '').trim();
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    const day = m[2].padStart(2,'0');
+    const month = m[1].padStart(2,'0');
+    const year = m[3].length === 2 ? '20' + m[3] : m[3];
+    return `${day}/${month}/${year}`;
+  }
+  return s;
+}
 function makeCodigo(mod, unid) {
   mod = String(mod || '').trim(); unid = String(unid || '').trim();
   if (!mod && !unid) return '';
