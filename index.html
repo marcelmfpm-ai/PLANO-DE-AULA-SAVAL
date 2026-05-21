@@ -235,8 +235,16 @@ function getFiltered() {
 function applyFilters() { const rows = getFiltered(); updateKpis(rows); renderTable(rows); renderDateChart(rows); renderTurmaChart(rows); }
 function resetFilters() { document.getElementById('fTurma').value='TODAS'; document.getElementById('fSaval').value='TODOS'; document.getElementById('fBusca').value=''; document.getElementById('fMod').value='TODOS'; applyFilters(); }
 function updateKpis(rows) { const total=rows.length, enviados=rows.filter(r=>r.enviado).length, pend=total-enviados; document.getElementById('kTotal').textContent=total; document.getElementById('kEnv').textContent=enviados; document.getElementById('kPend').textContent=pend; document.getElementById('kPerc').textContent=total?Math.round(enviados/total*100)+'%':'0%'; }
+function colorPA(pdVal, paVal) {
+  const pd = parseFloat(pdVal);
+  const pa = parseFloat(paVal);
+  const display = paVal || 0;
+  if (!isNaN(pd) && !isNaN(pa) && pa > pd) return `<td style="color:#ef4444;font-weight:700">${display}</td>`;
+  if (!isNaN(pd) && !isNaN(pa) && pa < pd) return `<td style="color:#22c55e;font-weight:700">${display}</td>`;
+  return `<td>${display}</td>`;
+}
 function renderTable(rows) {
-  document.getElementById('tbody').innerHTML = rows.map(r => `<tr><td><b>${r.turma}</b></td><td><b>${r.codigo}</b></td><td>${r.mod}</td><td>${r.unid}</td><td>${r.enviado ? '<span class="tag ok">Enviado</span>' : '<span class="tag no">Pendente</span>'}</td><td>${r.saval || '-'}</td><td>${r.prof_pd || 0}</td><td>${r.mon_pd || 0}</td><td>${r.aux_pd || 0}</td><td>${r.viat_pd || '-'}</td><td>${r.prof_pa || 0}</td><td>${r.mon_pa || 0}</td><td>${r.aux_pa || 0}</td><td>${r.viat_pa || '-'}</td></tr>`).join('');
+  document.getElementById('tbody').innerHTML = rows.map(r => `<tr><td><b>${r.turma}</b></td><td><b>${r.codigo}</b></td><td>${r.mod}</td><td>${r.unid}</td><td>${r.enviado ? '<span class="tag ok">Enviado</span>' : '<span class="tag no">Pendente</span>'}</td><td>${r.saval || '-'}</td><td>${r.prof_pd || 0}</td><td>${r.mon_pd || 0}</td><td>${r.aux_pd || 0}</td><td>${r.viat_pd || 0}</td>${colorPA(r.prof_pd,r.prof_pa)}${colorPA(r.mon_pd,r.mon_pa)}${colorPA(r.aux_pd,r.aux_pa)}${colorPA(r.viat_pd,r.viat_pa)}</tr>`).join('');
 }
 function renderBars(targetId, items) {
   const el = document.getElementById(targetId);
