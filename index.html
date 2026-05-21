@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel SAVAL - Planos de Aula</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg:#0f172a; --card:#111827; --card2:#1f2937; --text:#e5e7eb; --muted:#9ca3af;
+    --line:#334155; --accent:#38bdf8; --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Arial, Helvetica, sans-serif; background:linear-gradient(135deg,#020617,#111827); color:var(--text); }
+  header { padding:24px 28px 12px; border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:26px; letter-spacing:.3px; }
+  .subtitle { color:var(--muted); margin-top:8px; font-size:14px; }
+  .wrap { padding:22px 28px 32px; }
+  .filters { display:grid; grid-template-columns: repeat(6, minmax(150px, 1fr)); gap:12px; margin-bottom:18px; }
+  .filter-card { background:rgba(17,24,39,.92); border:1px solid var(--line); border-radius:14px; padding:12px; }
+  label { display:block; color:var(--muted); font-size:12px; margin-bottom:6px; }
+  select, input { width:100%; padding:10px; border-radius:10px; border:1px solid var(--line); background:#020617; color:var(--text); }
+  .btns { display:flex; gap:8px; align-items:end; flex-wrap:wrap; }
+  button { padding:10px 12px; border:0; border-radius:10px; cursor:pointer; color:#06101f; background:var(--accent); font-weight:700; }
+  button.secondary { background:#334155; color:var(--text); }
+  .kpis { display:grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap:14px; margin:18px 0; }
+  .kpi { background:rgba(17,24,39,.92); border:1px solid var(--line); border-radius:16px; padding:16px; }
+  .kpi .n { font-size:30px; font-weight:800; margin-top:6px; }
+  .kpi .t { color:var(--muted); font-size:13px; }
+  .grid { display:grid; grid-template-columns: 1.05fr .95fr; gap:16px; align-items:start; }
+  .card { background:rgba(17,24,39,.94); border:1px solid var(--line); border-radius:16px; padding:16px; box-shadow:0 12px 30px rgba(0,0,0,.25); }
+  .card h2 { margin:0 0 12px; font-size:18px; }
+  .chart-row { display:flex; align-items:center; gap:10px; margin:10px 0; }
+  .chart-label { min-width:110px; color:var(--muted); font-size:13px; }
+  .bar-wrap { flex:1; height:30px; background:#020617; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
+  .bar { height:100%; background:linear-gradient(90deg,#38bdf8,#22c55e); border-radius:999px; display:flex; align-items:center; justify-content:flex-end; padding-right:10px; color:#02111f; font-weight:800; min-width:0; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { padding:9px 8px; border-bottom:1px solid #243044; text-align:left; }
+  th { position:sticky; top:0; background:#0b1220; color:#cbd5e1; z-index:1; }
+  tr:hover { background:#172033; }
+  .tag { display:inline-block; padding:4px 8px; border-radius:999px; font-weight:700; font-size:12px; }
+  .ok { background:rgba(34,197,94,.16); color:#86efac; border:1px solid rgba(34,197,94,.35); }
+  .no { background:rgba(239,68,68,.14); color:#fca5a5; border:1px solid rgba(239,68,68,.35); }
+  .table-box { max-height:520px; overflow:auto; border-radius:12px; border:1px solid var(--line); }
+  .small { color:var(--muted); font-size:12px; margin-top:8px; }
+  .status { margin:0 0 14px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; color:var(--muted); background:rgba(17,24,39,.7); }
+  .erro { color:#fecaca; border-color:rgba(239,68,68,.55); background:rgba(239,68,68,.12); }
+  @media (max-width:1000px) { .filters,.kpis,.grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Painel de Controle - Planos de Aula / SAVAL</h1>
+  <div class="subtitle">Leitura automática da planilha Excel localizada na mesma pasta deste HTML. O campo Plano é a junção da coluna B + coluna C, por exemplo: M2.1, M3.7. A coluna M é usada para identificar envio ao SAVAL.</div>
+</header>
+<div class="wrap">
+  <div id="status" class="status">Carregando planilha...</div>
+
+  <section class="filters">
+    <div class="filter-card">
+      <label>Turma / Aba</label>
+      <select id="fTurma">
+        <option value="TODAS">Todas</option>
+        <option value="EPF">EPF</option>
+        <option value="DPF">DPF</option>
+        <option value="PPF">PPF</option>
+        <option value="PCF">PCF</option>
+      </select>
+    </div>
+    <div class="filter-card">
+      <label>SAVAL</label>
+      <select id="fSaval">
+        <option value="TODOS">Todos</option>
+        <option value="ENVIADOS">Somente enviados</option>
+        <option value="PENDENTES">Somente pendentes</option>
+      </select>
+    </div>
+    <div class="filter-card">
+      <label>Módulo</label>
+      <select id="fMod"><option value="TODOS">Todos</option></select>
+    </div>
+    <div class="filter-card">
+      <label>Buscar plano / texto</label>
+      <input id="fBusca" placeholder="Ex.: M2.1, M3.7, EPF..." />
+    </div>
+    <div class="filter-card">
+      <label>Nome do arquivo Excel</label>
+      <input id="excelName" value="CONTROLE RECURSOS HUMANOS - PLANO DE AULA.xlsx" />
+    </div>
+    <div class="filter-card btns">
+      <button onclick="loadExcel()">Atualizar Excel</button>
+      <button class="secondary" onclick="resetFilters()">Limpar</button>
+    </div>
+  </section>
+
+  <section class="kpis">
+    <div class="kpi"><div class="t">Total de planos</div><div class="n" id="kTotal">0</div></div>
+    <div class="kpi"><div class="t">Enviados ao SAVAL</div><div class="n" id="kEnv">0</div></div>
+    <div class="kpi"><div class="t">Pendentes</div><div class="n" id="kPend">0</div></div>
+    <div class="kpi"><div class="t">% enviado</div><div class="n" id="kPerc">0%</div></div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>Planos enviados ao SAVAL por data</h2>
+      <div id="chartData"></div>
+      <div class="small">Conta apenas registros com valor preenchido na coluna M.</div>
+    </div>
+    <div class="card">
+      <h2>Enviados por turma</h2>
+      <div id="chartTurma"></div>
+      <div class="small">Filtro EPF/DPF/PPF/PCF afeta este gráfico.</div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:16px;">
+    <h2>Relação dos planos</h2>
+    <div class="table-box">
+      <table>
+        <thead>
+          <tr>
+            <th>Turma</th><th>Plano</th><th>Módulo</th><th>Unidade</th><th>SAVAL</th><th>Data envio</th>
+            <th>Prof. PD</th><th>Mon. PD</th><th>Aux. PD</th><th>Viat. PD</th>
+            <th>Prof. PA</th><th>Mon. PA</th><th>Aux. PA</th><th>Viat. PA</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+let DATA = [];
+const TURMAS = ['EPF','DPF','PPF','PCF'];
+
+function cell(row, i) { return row && row[i] !== undefined && row[i] !== null ? String(row[i]).trim() : ''; }
+function isBlankRow(row) { return !row || row.every(v => String(v ?? '').trim() === ''); }
+function unique(arr) { return [...new Set(arr.filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'pt-BR',{numeric:true})); }
+function normalizeDate(v) {
+  const s = String(v || '').trim();
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    const year = m[3].length === 2 ? '20' + m[3] : m[3];
+    return `${m[2].padStart(2,'0')}/${m[1].padStart(2,'0')}/${year}`;
+  }
+  return s;
+}
+function makeCodigo(mod, unid) {
+  mod = String(mod || '').trim(); unid = String(unid || '').trim();
+  if (!mod && !unid) return '';
+  if (!unid) return mod;
+  if (mod.endsWith('.') || unid.startsWith('.')) return mod + unid;
+  return mod + '.' + unid;
+}
+function linhaValida(row) {
+  const mod = cell(row,1).toUpperCase();
+  const unid = cell(row,2).toUpperCase();
+  if (!mod || mod === 'MÓDULO' || mod === 'MODULO') return false;
+  if (!mod.startsWith('M')) return false;
+  return !!unid;
+}
+
+async function loadExcel() {
+  const status = document.getElementById('status');
+  const arquivo = document.getElementById('excelName').value.trim();
+  status.className = 'status';
+  status.textContent = 'Carregando planilha: ' + arquivo + ' ...';
+  try {
+    const resposta = await fetch(arquivo + '?v=' + Date.now());
+    if (!resposta.ok) throw new Error('Arquivo não encontrado pelo Live Server.');
+    const buffer = await resposta.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type:'array', cellDates:true });
+    DATA = [];
+
+    TURMAS.forEach(turma => {
+      const sheetName = workbook.SheetNames.find(n => n.trim().toUpperCase() === turma);
+      if (!sheetName) return;
+      const ws = workbook.Sheets[sheetName];
+      const linhas = XLSX.utils.sheet_to_json(ws, { header:1, raw:false, defval:'' });
+
+      // A primeira linha válida de cada aba é apenas descrição/modelo,
+      // não é plano de aula a ser enviado ao SAVAL. Por isso, ela é ignorada.
+      const linhasValidas = linhas.filter(row => !isBlankRow(row) && linhaValida(row));
+
+      linhasValidas.slice(1).forEach(row => {
+        const mod = cell(row,1);
+        const unid = cell(row,2);
+        const saval = normalizeDate(cell(row,12));
+        DATA.push({
+          turma,
+          codigo: makeCodigo(mod, unid),
+          mod,
+          unid,
+          ponto_focal: cell(row,3),
+          prof_pd: cell(row,4),
+          mon_pd: cell(row,5),
+          aux_pd: cell(row,6),
+          viat_pd: cell(row,7),
+          prof_pa: cell(row,8),
+          mon_pa: cell(row,9),
+          aux_pa: cell(row,10),
+          viat_pa: cell(row,11),
+          saval,
+          inicio: cell(row,13),
+          fim: cell(row,14),
+          obs: cell(row,15),
+          enviado: saval !== ''
+        });
+      });
+    });
+
+    const mods = unique(DATA.map(r => r.mod));
+    document.getElementById('fMod').innerHTML = '<option value="TODOS">Todos</option>' + mods.map(m => `<option value="${m}">${m}</option>`).join('');
+    applyFilters();
+    status.textContent = `Planilha carregada com sucesso. Registros encontrados: ${DATA.length}.`;
+  } catch (e) {
+    console.error(e);
+    DATA = [];
+    applyFilters();
+    status.className = 'status erro';
+    status.innerHTML = 'Erro ao carregar a planilha. Confira se este HTML está na mesma pasta do Excel, se o nome do arquivo está idêntico e se você abriu pelo <b>Live Server</b>.';
+  }
+}
+
+function getFiltered() {
+  const turma = document.getElementById('fTurma').value;
+  const saval = document.getElementById('fSaval').value;
+  const mod = document.getElementById('fMod').value;
+  const busca = document.getElementById('fBusca').value.trim().toLowerCase();
+  return DATA.filter(r => {
+    if (turma !== 'TODAS' && r.turma !== turma) return false;
+    if (saval === 'ENVIADOS' && !r.enviado) return false;
+    if (saval === 'PENDENTES' && r.enviado) return false;
+    if (mod !== 'TODOS' && r.mod !== mod) return false;
+    if (busca) {
+      const alvo = `${r.turma} ${r.codigo} ${r.mod} ${r.unid} ${r.saval} ${r.obs}`.toLowerCase();
+      if (!alvo.includes(busca)) return false;
+    }
+    return true;
+  });
+}
+function applyFilters() { const rows = getFiltered(); updateKpis(rows); renderTable(rows); renderDateChart(rows); renderTurmaChart(rows); }
+function resetFilters() { document.getElementById('fTurma').value='TODAS'; document.getElementById('fSaval').value='TODOS'; document.getElementById('fBusca').value=''; document.getElementById('fMod').value='TODOS'; applyFilters(); }
+function updateKpis(rows) { const total=rows.length, enviados=rows.filter(r=>r.enviado).length, pend=total-enviados; document.getElementById('kTotal').textContent=total; document.getElementById('kEnv').textContent=enviados; document.getElementById('kPend').textContent=pend; document.getElementById('kPerc').textContent=total?Math.round(enviados/total*100)+'%':'0%'; }
+function cmpStyle(pdVal, paVal) {
+  const pd = parseFloat(pdVal);
+  const pa = parseFloat(paVal);
+  if (isNaN(pd) || isNaN(pa)) return '';
+  if (pa < pd) return 'color:#22c55e;font-weight:800;';
+  if (pa > pd) return 'color:#ef4444;font-weight:800;';
+  return '';
+}
+function renderTable(rows) {
+  document.getElementById('tbody').innerHTML = rows.map(r => {
+    const sProfPA = cmpStyle(r.prof_pd, r.prof_pa);
+    const sMonPA  = cmpStyle(r.mon_pd,  r.mon_pa);
+    const sAuxPA  = cmpStyle(r.aux_pd,  r.aux_pa);
+    const sViatPA = cmpStyle(r.viat_pd, r.viat_pa);
+    return `<tr>
+      <td><b>${r.turma}</b></td>
+      <td><b>${r.codigo}</b></td>
+      <td>${r.mod}</td>
+      <td>${r.unid}</td>
+      <td>${r.enviado ? '<span class="tag ok">Enviado</span>' : '<span class="tag no">Pendente</span>'}</td>
+      <td>${r.saval || '-'}</td>
+      <td>${r.prof_pd || 0}</td>
+      <td>${r.mon_pd || 0}</td>
+      <td>${r.aux_pd || 0}</td>
+      <td>${r.viat_pd || '-'}</td>
+      <td style="${sProfPA}">${r.prof_pa || 0}</td>
+      <td style="${sMonPA}">${r.mon_pa  || 0}</td>
+      <td style="${sAuxPA}">${r.aux_pa  || 0}</td>
+      <td style="${sViatPA}">${r.viat_pa || '-'}</td>
+    </tr>`;
+  }).join('');
+}
+function renderBars(targetId, items) {
+  const el = document.getElementById(targetId);
+  if (!items.length) { el.innerHTML = '<div class="small">Nenhum dado para exibir.</div>'; return; }
+  const max = Math.max(...items.map(i=>i.value), 1);
+  el.innerHTML = items.map(i => { const pct = Math.max(4, (i.value/max)*100); return `<div class="chart-row"><div class="chart-label">${i.label}</div><div class="bar-wrap"><div class="bar" style="width:${pct}%">${i.value}</div></div></div>`; }).join('');
+}
+function renderDateChart(rows) { const counts={}; rows.filter(r=>r.enviado).forEach(r=>counts[r.saval]=(counts[r.saval]||0)+1); renderBars('chartData', Object.entries(counts).map(([label,value])=>({label,value})).sort((a,b)=>a.label.localeCompare(b.label,'pt-BR'))); }
+function renderTurmaChart(rows) { const counts={}; rows.filter(r=>r.enviado).forEach(r=>counts[r.turma]=(counts[r.turma]||0)+1); renderBars('chartTurma', TURMAS.filter(t=>counts[t]).map(t=>({label:t,value:counts[t]}))); }
+
+['fBusca','fTurma','fSaval','fMod'].forEach(id => document.getElementById(id).addEventListener(id==='fBusca'?'input':'change', applyFilters));
+loadExcel();
+</script>
+</body>
+</html>
