@@ -239,8 +239,8 @@ function colorPA(pdVal, paVal) {
   const pd = parseFloat(pdVal);
   const pa = parseFloat(paVal);
   const display = paVal || 0;
-  if (!isNaN(pd) && !isNaN(pa) && pa > pd) return `<td style="color:#ef4444;font-weight:700">${display}</td>`;
-  if (!isNaN(pd) && !isNaN(pa) && pa < pd) return `<td style="color:#22c55e;font-weight:700">${display}</td>`;
+  if (!isNaN(pd) && !isNaN(pa) && pa > pd) return `<td><span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:50%;background:#ef4444;color:#fff;font-weight:700;font-size:13px;padding:0 5px;">${display}</span></td>`;
+  if (!isNaN(pd) && !isNaN(pa) && pa < pd) return `<td><span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:50%;background:#22c55e;color:#fff;font-weight:700;font-size:13px;padding:0 5px;">${display}</span></td>`;
   return `<td>${display}</td>`;
 }
 function renderTable(rows) {
