@@ -119,7 +119,7 @@
       <table>
         <thead>
           <tr>
-            <th>Turma</th><th>Plano</th><th>Módulo</th><th>Unidade</th><th>SAVAL</th><th>Data envio</th>
+            <th>Turma</th><th>Plano</th><th>Módulo</th><th>Unidade</th><th>Ponto Focal</th><th>SAVAL</th><th>Data envio</th>
             <th>Prof. PD</th><th>Mon. PD</th><th>Aux. PD</th><th>Viat. PD</th>
             <th>Prof. PA</th><th>Mon. PA</th><th>Aux. PA</th><th>Viat. PA</th>
           </tr>
@@ -262,7 +262,7 @@ function colorPA(pdVal, paVal) {
   return `<td>${display}</td>`;
 }
 function renderTable(rows) {
-  document.getElementById('tbody').innerHTML = rows.map(r => `<tr><td><b>${r.turma}</b></td><td><b>${r.codigo}</b></td><td>${r.mod}</td><td>${r.unid}</td><td>${r.enviado ? '<span class="tag ok">Enviado</span>' : '<span class="tag no">Pendente</span>'}</td><td>${r.saval || '-'}</td><td>${r.prof_pd || 0}</td><td>${r.mon_pd || 0}</td><td>${r.aux_pd || 0}</td><td>${r.viat_pd || 0}</td>${colorPA(r.prof_pd,r.prof_pa)}${colorPA(r.mon_pd,r.mon_pa)}${colorPA(r.aux_pd,r.aux_pa)}${colorPA(r.viat_pd,r.viat_pa)}</tr>`).join('');
+  document.getElementById('tbody').innerHTML = rows.map(r => `<tr><td><b>${r.turma}</b></td><td><b>${r.codigo}</b></td><td>${r.mod}</td><td>${r.unid}</td><td>${r.ponto_focal || '-'}</td><td>${r.enviado ? '<span class="tag ok">Enviado</span>' : '<span class="tag no">Pendente</span>'}</td><td>${r.saval || '-'}</td><td>${r.prof_pd || 0}</td><td>${r.mon_pd || 0}</td><td>${r.aux_pd || 0}</td><td>${r.viat_pd || 0}</td>${colorPA(r.prof_pd,r.prof_pa)}${colorPA(r.mon_pd,r.mon_pa)}${colorPA(r.aux_pd,r.aux_pa)}${colorPA(r.viat_pd,r.viat_pa)}</tr>`).join('');
 }
 function renderBars(targetId, items) {
   const el = document.getElementById(targetId);
