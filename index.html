@@ -45,6 +45,8 @@
   .andamento-select.and-pendente { background:rgba(148,163,184,.14); color:#cbd5e1; border-color:rgba(148,163,184,.35); }
   .andamento-select.and-revisado { background:rgba(245,158,11,.16); color:#fcd34d; border-color:rgba(245,158,11,.4); }
   .andamento-select.and-enviado { background:rgba(34,197,94,.16); color:#86efac; border-color:rgba(34,197,94,.35); }
+  .andamento-select.and-sem-plano { background:rgba(239,68,68,.14); color:#fca5a5; border-color:rgba(239,68,68,.35); }
+  .andamento-select option { background-color:#0b1220; color:#e5e7eb; }
   .table-box { max-height:520px; overflow:auto; border-radius:12px; border:1px solid var(--line); }
   .small { color:var(--muted); font-size:12px; margin-top:8px; }
   .status { margin:0 0 14px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; color:var(--muted); background:rgba(17,24,39,.7); }
@@ -152,7 +154,7 @@ const GITHUB_REPO = 'PLANO-DE-AULA-SAVAL';
 const GITHUB_BRANCH = 'main';
 const COLS = { ponto_focal:3, prof_pd:4, mon_pd:5, aux_pd:6, viat_pd:7, prof_pa:8, mon_pa:9, aux_pa:10, viat_pa:11, saval:12, andamento:16 };
 const ANDAMENTO_COL = 16;
-const ANDAMENTO_OPTIONS = ['Pendente','Revisado para envio','Enviado'];
+const ANDAMENTO_OPTIONS = ['Pendente','Revisado para envio','Enviado','Sem plano de aula'];
 
 function cell(row, i) { return row && row[i] !== undefined && row[i] !== null ? String(row[i]).trim() : ''; }
 function isBlankRow(row) { return !row || row.every(v => String(v ?? '').trim() === ''); }
@@ -303,6 +305,7 @@ function colorPA(id, base, pdVal, paVal) {
 function andamentoClass(val) {
   if (val === 'Revisado para envio') return 'and-revisado';
   if (val === 'Enviado') return 'and-enviado';
+  if (val === 'Sem plano de aula') return 'and-sem-plano';
   return 'and-pendente';
 }
 function andamentoSelect(id, val) {
