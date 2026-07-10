@@ -45,6 +45,10 @@
   .small { color:var(--muted); font-size:12px; margin-top:8px; }
   .status { margin:0 0 14px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; color:var(--muted); background:rgba(17,24,39,.7); }
   .erro { color:#fecaca; border-color:rgba(239,68,68,.55); background:rgba(239,68,68,.12); }
+  .editable { outline:none; border-radius:4px; padding:2px 5px; display:inline-block; min-width:16px; }
+  .editable:hover { background:rgba(56,189,248,.12); }
+  .editable:focus { background:rgba(56,189,248,.18); box-shadow:0 0 0 1px var(--accent); }
+  #btnSalvarGithub.dirty { background:var(--warn); }
   @media (max-width:1000px) { .filters,.kpis,.grid { grid-template-columns:1fr; } }
 </style>
 </head>
@@ -90,8 +94,11 @@
     <div class="filter-card btns">
       <button onclick="loadExcel()">Atualizar Excel</button>
       <button class="secondary" onclick="resetFilters()">Limpar</button>
+      <button id="btnSalvarGithub" onclick="salvarNoGithub()">Salvar no GitHub</button>
+      <button class="secondary" onclick="trocarToken()">Trocar token</button>
     </div>
   </section>
+  <div class="small">Clique em qualquer célula editável (Ponto Focal, Data envio, Prof/Mon/Aux/Viat PD e PA) para alterar o valor. O botão "Salvar no GitHub" grava as alterações direto no arquivo Excel do repositório.</div>
 
   <section class="kpis">
     <div class="kpi"><div class="t">Total de planos</div><div class="n" id="kTotal">0</div></div>
@@ -132,7 +139,14 @@
 
 <script>
 let DATA = [];
+let workbook = null;
+let idCounter = 0;
+let dirty = false;
 const TURMAS = ['EPF','DPF','PPF','PCF'];
+const GITHUB_OWNER = 'marcelmfpm-ai';
+const GITHUB_REPO = 'PLANO-DE-AULA-SAVAL';
+const GITHUB_BRANCH = 'main';
+const COLS = { ponto_focal:3, prof_pd:4, mon_pd:5, aux_pd:6, viat_pd:7, prof_pa:8, mon_pa:9, aux_pa:10, viat_pa:11, saval:12 };
 
 function cell(row, i) { return row && row[i] !== undefined && row[i] !== null ? String(row[i]).trim() : ''; }
 function isBlankRow(row) { return !row || row.every(v => String(v ?? '').trim() === ''); }
@@ -141,8 +155,8 @@ function normalizeDate(v) {
   const s = String(v || '').trim();
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
   if (m) {
-    const day = m[2].padStart(2,'0');
-    const month = m[1].padStart(2,'0');
+    const day = m[1].padStart(2,'0');
+    const month = m[2].padStart(2,'0');
     const year = m[3].length === 2 ? '20' + m[3] : m[3];
     return `${day}/${month}/${year}`;
   }
@@ -172,24 +186,33 @@ async function loadExcel() {
     const resposta = await fetch(arquivo + '?v=' + Date.now());
     if (!resposta.ok) throw new Error('Arquivo não encontrado pelo Live Server.');
     const buffer = await resposta.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type:'array', cellDates:true });
+    workbook = XLSX.read(buffer, { type:'array', cellDates:true });
     DATA = [];
+    idCounter = 0;
+    dirty = false;
 
     TURMAS.forEach(turma => {
       const sheetName = workbook.SheetNames.find(n => n.trim().toUpperCase() === turma);
       if (!sheetName) return;
       const ws = workbook.Sheets[sheetName];
+      const range = XLSX.utils.decode_range(ws['!ref']);
       const linhas = XLSX.utils.sheet_to_json(ws, { header:1, raw:false, defval:'' });
 
       // A primeira linha válida de cada aba é apenas descrição/modelo,
       // não é plano de aula a ser enviado ao SAVAL. Por isso, ela é ignorada.
-      const linhasValidas = linhas.filter(row => !isBlankRow(row) && linhaValida(row));
+      let validCount = 0;
+      linhas.forEach((row, idx) => {
+        if (isBlankRow(row) || !linhaValida(row)) return;
+        validCount++;
+        if (validCount === 1) return;
 
-      linhasValidas.slice(1).forEach(row => {
         const mod = cell(row,1);
         const unid = cell(row,2);
         const saval = normalizeDate(cell(row,12));
         DATA.push({
+          id: idCounter++,
+          sheetName,
+          sheetRow: range.s.r + idx,
           turma,
           codigo: makeCodigo(mod, unid),
           mod,
@@ -224,9 +247,11 @@ async function loadExcel() {
     const min = String(agora.getMinutes()).padStart(2,'0');
     const seg = String(agora.getSeconds()).padStart(2,'0');
     document.getElementById('ultimaAtualizacao').textContent = `Última Atualização: ${dia}/${mes}/${ano} às ${h}:${min}:${seg}`;
+    updateSaveButtonState();
   } catch (e) {
     console.error(e);
     DATA = [];
+    workbook = null;
     applyFilters();
     status.className = 'status erro';
     status.innerHTML = 'Erro ao carregar a planilha. Confira se este HTML está na mesma pasta do Excel, se o nome do arquivo está idêntico e se você abriu pelo <b>Live Server</b>.';
@@ -253,17 +278,73 @@ function getFiltered() {
 function applyFilters() { const rows = getFiltered(); updateKpis(rows); renderTable(rows); renderDateChart(rows); renderTurmaChart(rows); }
 function resetFilters() { document.getElementById('fTurma').value='TODAS'; document.getElementById('fSaval').value='TODOS'; document.getElementById('fBusca').value=''; document.getElementById('fMod').value='TODOS'; applyFilters(); }
 function updateKpis(rows) { const total=rows.length, enviados=rows.filter(r=>r.enviado).length, pend=total-enviados; document.getElementById('kTotal').textContent=total; document.getElementById('kEnv').textContent=enviados; document.getElementById('kPend').textContent=pend; document.getElementById('kPerc').textContent=total?Math.round(enviados/total*100)+'%':'0%'; }
-function colorPA(pdVal, paVal) {
+function editable(id, field, value) {
+  return `<span class="editable" contenteditable="true" spellcheck="false" data-id="${id}" data-field="${field}">${value}</span>`;
+}
+function paStyle(pdVal, paVal) {
   const pd = parseFloat(pdVal);
   const pa = parseFloat(paVal);
+  let bg = 'transparent', color = 'inherit';
+  if (!isNaN(pd) && !isNaN(pa) && pa > pd) { bg = '#ef4444'; color = '#fff'; }
+  else if (!isNaN(pd) && !isNaN(pa) && pa < pd) { bg = '#22c55e'; color = '#fff'; }
+  return `display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:50%;font-weight:700;font-size:13px;padding:0 5px;background:${bg};color:${color};`;
+}
+function colorPA(id, base, pdVal, paVal) {
   const display = paVal || 0;
-  if (!isNaN(pd) && !isNaN(pa) && pa > pd) return `<td><span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:50%;background:#ef4444;color:#fff;font-weight:700;font-size:13px;padding:0 5px;">${display}</span></td>`;
-  if (!isNaN(pd) && !isNaN(pa) && pa < pd) return `<td><span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:50%;background:#22c55e;color:#fff;font-weight:700;font-size:13px;padding:0 5px;">${display}</span></td>`;
-  return `<td>${display}</td>`;
+  return `<td><span class="editable pa-val" contenteditable="true" spellcheck="false" data-id="${id}" data-field="${base}_pa" style="${paStyle(pdVal, paVal)}">${display}</span></td>`;
 }
 function renderTable(rows) {
-  document.getElementById('tbody').innerHTML = rows.map(r => `<tr><td><b>${r.turma}</b></td><td><b>${r.codigo}</b></td><td>${r.mod}</td><td>${r.unid}</td><td>${r.ponto_focal || '-'}</td><td>${r.enviado ? '<span class="tag ok">Enviado</span>' : '<span class="tag no">Pendente</span>'}</td><td>${r.saval || '-'}</td><td>${r.prof_pd || 0}</td><td>${r.mon_pd || 0}</td><td>${r.aux_pd || 0}</td><td>${r.viat_pd || 0}</td>${colorPA(r.prof_pd,r.prof_pa)}${colorPA(r.mon_pd,r.mon_pa)}${colorPA(r.aux_pd,r.aux_pa)}${colorPA(r.viat_pd,r.viat_pa)}</tr>`).join('');
+  document.getElementById('tbody').innerHTML = rows.map(r => `<tr>
+    <td><b>${r.turma}</b></td>
+    <td><b>${r.codigo}</b></td>
+    <td>${r.mod}</td>
+    <td>${r.unid}</td>
+    <td>${editable(r.id,'ponto_focal', r.ponto_focal || '-')}</td>
+    <td id="tag-${r.id}">${r.enviado ? '<span class="tag ok">Enviado</span>' : '<span class="tag no">Pendente</span>'}</td>
+    <td>${editable(r.id,'saval', r.saval || '-')}</td>
+    <td>${editable(r.id,'prof_pd', r.prof_pd || 0)}</td>
+    <td>${editable(r.id,'mon_pd', r.mon_pd || 0)}</td>
+    <td>${editable(r.id,'aux_pd', r.aux_pd || 0)}</td>
+    <td>${editable(r.id,'viat_pd', r.viat_pd || 0)}</td>
+    ${colorPA(r.id,'prof', r.prof_pd, r.prof_pa)}
+    ${colorPA(r.id,'mon', r.mon_pd, r.mon_pa)}
+    ${colorPA(r.id,'aux', r.aux_pd, r.aux_pa)}
+    ${colorPA(r.id,'viat', r.viat_pd, r.viat_pa)}
+  </tr>`).join('');
 }
+function onCellEdit(e) {
+  const el = e.target.closest('[data-field]');
+  if (!el) return;
+  const id = Number(el.dataset.id);
+  const field = el.dataset.field;
+  const row = DATA.find(d => d.id === id);
+  if (!row) return;
+  let val = el.textContent.trim();
+  if (val === '-') val = '';
+
+  if (field === 'saval') {
+    row.saval = normalizeDate(val);
+    row.enviado = row.saval !== '';
+    el.textContent = row.saval || '-';
+    const tagCell = document.getElementById('tag-' + id);
+    if (tagCell) tagCell.innerHTML = row.enviado ? '<span class="tag ok">Enviado</span>' : '<span class="tag no">Pendente</span>';
+    const rows = getFiltered();
+    updateKpis(rows); renderDateChart(rows); renderTurmaChart(rows);
+  } else {
+    row[field] = val;
+    if (field.endsWith('_pd') || field.endsWith('_pa')) {
+      const base = field.replace(/_p[ad]$/, '');
+      const paEl = document.querySelector(`.pa-val[data-id="${id}"][data-field="${base}_pa"]`);
+      if (paEl) {
+        paEl.style.cssText = paStyle(row[base + '_pd'], row[base + '_pa']);
+        paEl.textContent = row[base + '_pa'] || 0;
+      }
+    }
+  }
+  dirty = true;
+  updateSaveButtonState();
+}
+document.getElementById('tbody').addEventListener('focusout', onCellEdit);
 function renderBars(targetId, items) {
   const el = document.getElementById(targetId);
   if (!items.length) { el.innerHTML = '<div class="small">Nenhum dado para exibir.</div>'; return; }
@@ -272,6 +353,89 @@ function renderBars(targetId, items) {
 }
 function renderDateChart(rows) { const counts={}; rows.filter(r=>r.enviado).forEach(r=>counts[r.saval]=(counts[r.saval]||0)+1); renderBars('chartData', Object.entries(counts).map(([label,value])=>({label,value})).sort((a,b)=>a.label.localeCompare(b.label,'pt-BR'))); }
 function renderTurmaChart(rows) { const counts={}; rows.filter(r=>r.enviado).forEach(r=>counts[r.turma]=(counts[r.turma]||0)+1); renderBars('chartTurma', TURMAS.filter(t=>counts[t]).map(t=>({label:t,value:counts[t]}))); }
+
+function updateSaveButtonState() {
+  const btn = document.getElementById('btnSalvarGithub');
+  if (!btn) return;
+  btn.classList.toggle('dirty', dirty);
+  btn.textContent = dirty ? 'Salvar no GitHub *' : 'Salvar no GitHub';
+}
+
+function writeCell(ws, addr, val) {
+  const str = String(val ?? '').trim();
+  if (str === '') { delete ws[addr]; return; }
+  if (/^-?\d+([.,]\d+)?$/.test(str)) {
+    ws[addr] = { t:'n', v:Number(str.replace(',', '.')) };
+  } else {
+    ws[addr] = { t:'s', v:str };
+  }
+}
+function aplicarEdicoesNoWorkbook() {
+  DATA.forEach(r => {
+    const ws = workbook.Sheets[r.sheetName];
+    Object.entries(COLS).forEach(([field, col]) => {
+      const addr = XLSX.utils.encode_cell({ r:r.sheetRow, c:col });
+      writeCell(ws, addr, r[field]);
+    });
+  });
+}
+
+function getToken() {
+  let token = localStorage.getItem('saval_gh_token');
+  if (!token) {
+    token = prompt('Informe seu GitHub Personal Access Token (com permissão de escrita no repositório). Ele fica salvo apenas neste navegador (localStorage), nunca é enviado a terceiros além do GitHub.');
+    if (token) localStorage.setItem('saval_gh_token', token.trim());
+  }
+  return token ? token.trim() : '';
+}
+function trocarToken() {
+  localStorage.removeItem('saval_gh_token');
+  getToken();
+}
+
+async function salvarNoGithub() {
+  const status = document.getElementById('status');
+  if (!workbook) { alert('Carregue a planilha antes de salvar.'); return; }
+  const token = getToken();
+  if (!token) return;
+  const arquivo = document.getElementById('excelName').value.trim();
+  status.className = 'status';
+  status.textContent = 'Salvando alterações no GitHub...';
+  try {
+    aplicarEdicoesNoWorkbook();
+    const conteudoBase64 = XLSX.write(workbook, { bookType:'xlsx', type:'base64' });
+    const apiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${encodeURIComponent(arquivo)}`;
+
+    const getResp = await fetch(`${apiUrl}?ref=${GITHUB_BRANCH}`, {
+      headers: { Authorization: `token ${token}`, Accept:'application/vnd.github+json' }
+    });
+    if (!getResp.ok) throw new Error(`Não foi possível localizar "${arquivo}" no repositório GitHub (HTTP ${getResp.status}).`);
+    const meta = await getResp.json();
+
+    const putResp = await fetch(apiUrl, {
+      method:'PUT',
+      headers: { Authorization: `token ${token}`, Accept:'application/vnd.github+json', 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        message: 'Atualiza planilha via painel SAVAL (' + new Date().toLocaleString('pt-BR') + ')',
+        content: conteudoBase64,
+        sha: meta.sha,
+        branch: GITHUB_BRANCH
+      })
+    });
+    if (!putResp.ok) {
+      const err = await putResp.json().catch(() => ({}));
+      throw new Error(err.message || `Falha ao salvar no GitHub (HTTP ${putResp.status}).`);
+    }
+
+    dirty = false;
+    updateSaveButtonState();
+    status.textContent = 'Alterações salvas no GitHub com sucesso.';
+  } catch (e) {
+    console.error(e);
+    status.className = 'status erro';
+    status.textContent = 'Erro ao salvar no GitHub: ' + e.message;
+  }
+}
 
 ['fBusca','fTurma','fSaval','fMod'].forEach(id => document.getElementById(id).addEventListener(id==='fBusca'?'input':'change', applyFilters));
 loadExcel();
