@@ -41,6 +41,10 @@
   .tag { display:inline-block; padding:4px 8px; border-radius:999px; font-weight:700; font-size:12px; }
   .ok { background:rgba(34,197,94,.16); color:#86efac; border:1px solid rgba(34,197,94,.35); }
   .no { background:rgba(239,68,68,.14); color:#fca5a5; border:1px solid rgba(239,68,68,.35); }
+  .andamento-select { padding:4px 8px; border-radius:999px; font-weight:700; font-size:12px; border:1px solid var(--line); background:#020617; color:var(--text); }
+  .andamento-select.and-pendente { background:rgba(148,163,184,.14); color:#cbd5e1; border-color:rgba(148,163,184,.35); }
+  .andamento-select.and-revisado { background:rgba(245,158,11,.16); color:#fcd34d; border-color:rgba(245,158,11,.4); }
+  .andamento-select.and-enviado { background:rgba(34,197,94,.16); color:#86efac; border-color:rgba(34,197,94,.35); }
   .table-box { max-height:520px; overflow:auto; border-radius:12px; border:1px solid var(--line); }
   .small { color:var(--muted); font-size:12px; margin-top:8px; }
   .status { margin:0 0 14px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; color:var(--muted); background:rgba(17,24,39,.7); }
@@ -126,7 +130,7 @@
       <table>
         <thead>
           <tr>
-            <th>Turma</th><th>Plano</th><th>Módulo</th><th>Unidade</th><th>Ponto Focal</th><th>SAVAL</th><th>Data envio</th>
+            <th>Turma</th><th>Plano</th><th>Módulo</th><th>Unidade</th><th>Ponto Focal</th><th>Andamento</th><th>SAVAL</th><th>Data envio</th>
             <th style="color:#38bdf8">Prof. PD</th><th style="color:#38bdf8">Mon. PD</th><th style="color:#38bdf8">Aux. PD</th><th style="color:#38bdf8">Viat. PD</th>
             <th style="color:#22c55e">Prof. PA</th><th style="color:#22c55e">Mon. PA</th><th style="color:#22c55e">Aux. PA</th><th style="color:#22c55e">Viat. PA</th>
           </tr>
@@ -146,7 +150,9 @@ const TURMAS = ['EPF','DPF','PPF','PCF'];
 const GITHUB_OWNER = 'marcelmfpm-ai';
 const GITHUB_REPO = 'PLANO-DE-AULA-SAVAL';
 const GITHUB_BRANCH = 'main';
-const COLS = { ponto_focal:3, prof_pd:4, mon_pd:5, aux_pd:6, viat_pd:7, prof_pa:8, mon_pa:9, aux_pa:10, viat_pa:11, saval:12 };
+const COLS = { ponto_focal:3, prof_pd:4, mon_pd:5, aux_pd:6, viat_pd:7, prof_pa:8, mon_pa:9, aux_pa:10, viat_pa:11, saval:12, andamento:16 };
+const ANDAMENTO_COL = 16;
+const ANDAMENTO_OPTIONS = ['Pendente','Revisado para envio','Enviado'];
 
 function cell(row, i) { return row && row[i] !== undefined && row[i] !== null ? String(row[i]).trim() : ''; }
 function isBlankRow(row) { return !row || row.every(v => String(v ?? '').trim() === ''); }
@@ -230,6 +236,7 @@ async function loadExcel() {
           inicio: cell(row,13),
           fim: cell(row,14),
           obs: cell(row,15),
+          andamento: cell(row,16) || 'Pendente',
           enviado: saval !== ''
         });
       });
@@ -293,6 +300,15 @@ function colorPA(id, base, pdVal, paVal) {
   const display = paVal || 0;
   return `<td><span class="editable pa-val" contenteditable="true" spellcheck="false" data-id="${id}" data-field="${base}_pa" style="${paStyle(pdVal, paVal)}">${display}</span></td>`;
 }
+function andamentoClass(val) {
+  if (val === 'Revisado para envio') return 'and-revisado';
+  if (val === 'Enviado') return 'and-enviado';
+  return 'and-pendente';
+}
+function andamentoSelect(id, val) {
+  const options = ANDAMENTO_OPTIONS.map(o => `<option value="${o}" ${o === val ? 'selected' : ''}>${o}</option>`).join('');
+  return `<select class="andamento-select ${andamentoClass(val)}" data-id="${id}" data-field="andamento">${options}</select>`;
+}
 function renderTable(rows) {
   document.getElementById('tbody').innerHTML = rows.map(r => `<tr>
     <td><b>${r.turma}</b></td>
@@ -300,6 +316,7 @@ function renderTable(rows) {
     <td>${r.mod}</td>
     <td>${r.unid}</td>
     <td>${editable(r.id,'ponto_focal', r.ponto_focal || '-')}</td>
+    <td>${andamentoSelect(r.id, r.andamento)}</td>
     <td id="tag-${r.id}">${r.enviado ? '<span class="tag ok">Enviado</span>' : '<span class="tag no">Pendente</span>'}</td>
     <td>${editable(r.id,'saval', r.saval || '-')}</td>
     <td>${editable(r.id,'prof_pd', r.prof_pd || 0)}</td>
@@ -345,6 +362,18 @@ function onCellEdit(e) {
   updateSaveButtonState();
 }
 document.getElementById('tbody').addEventListener('focusout', onCellEdit);
+function onAndamentoChange(e) {
+  const el = e.target.closest('select[data-field="andamento"]');
+  if (!el) return;
+  const id = Number(el.dataset.id);
+  const row = DATA.find(d => d.id === id);
+  if (!row) return;
+  row.andamento = el.value;
+  el.className = `andamento-select ${andamentoClass(row.andamento)}`;
+  dirty = true;
+  updateSaveButtonState();
+}
+document.getElementById('tbody').addEventListener('change', onAndamentoChange);
 function renderBars(targetId, items) {
   const el = document.getElementById(targetId);
   if (!items.length) { el.innerHTML = '<div class="small">Nenhum dado para exibir.</div>'; return; }
@@ -370,7 +399,17 @@ function writeCell(ws, addr, val) {
     ws[addr] = { t:'s', v:str };
   }
 }
+function ensureAndamentoColumn(ws) {
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  if (range.e.c < ANDAMENTO_COL) {
+    range.e.c = ANDAMENTO_COL;
+    ws['!ref'] = XLSX.utils.encode_range(range);
+  }
+  const headerAddr = XLSX.utils.encode_cell({ r:range.s.r, c:ANDAMENTO_COL });
+  if (!ws[headerAddr]) ws[headerAddr] = { t:'s', v:'ANDAMENTO' };
+}
 function aplicarEdicoesNoWorkbook() {
+  unique(DATA.map(r => r.sheetName)).forEach(sheetName => ensureAndamentoColumn(workbook.Sheets[sheetName]));
   DATA.forEach(r => {
     const ws = workbook.Sheets[r.sheetName];
     Object.entries(COLS).forEach(([field, col]) => {
