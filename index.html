@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Painel SAVAL - Planos de Aula</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root {
     --bg:#0f172a; --card:#111827; --card2:#1f2937; --text:#e5e7eb; --muted:#9ca3af;
@@ -102,9 +104,10 @@
       <button class="secondary" onclick="resetFilters()">Limpar</button>
       <button id="btnSalvarGithub" onclick="salvarNoGithub()">Salvar no GitHub</button>
       <button class="secondary" onclick="trocarToken()">Trocar token</button>
+      <button class="secondary" onclick="gerarRelatorioPDF()">Gerar relatório PDF</button>
     </div>
   </section>
-  <div class="small">Clique em qualquer célula editável (Ponto Focal, Data envio, Prof/Mon/Aux/Viat PD e PA) para alterar o valor. O botão "Salvar no GitHub" grava as alterações direto no arquivo Excel do repositório.</div>
+  <div class="small">Clique em qualquer célula editável (Ponto Focal, Data envio, Prof/Mon/Aux/Viat PD e PA) para alterar o valor. O botão "Salvar no GitHub" grava as alterações direto no arquivo Excel do repositório. O botão "Gerar relatório PDF" exporta a tabela "Relação dos planos" considerando os filtros aplicados no momento.</div>
 
   <section class="kpis">
     <div class="kpi"><div class="t">Total de planos</div><div class="n" id="kTotal">0</div></div>
@@ -391,6 +394,36 @@ function updateSaveButtonState() {
   if (!btn) return;
   btn.classList.toggle('dirty', dirty);
   btn.textContent = dirty ? 'Salvar no GitHub *' : 'Salvar no GitHub';
+}
+
+function gerarRelatorioPDF() {
+  const rows = getFiltered();
+  if (!rows.length) { alert('Nenhum registro para gerar o relatório com os filtros atuais.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const dataGeracao = new Date().toLocaleString('pt-BR');
+
+  doc.setFontSize(14);
+  doc.text('Painel de Controle - Planos de Aula / SAVAL', 40, 32);
+  doc.setFontSize(9);
+  doc.text(`Relatório gerado em ${dataGeracao} — ${rows.length} plano(s) (respeitando os filtros aplicados)`, 40, 48);
+
+  const head = [['Turma','Plano','Módulo','Unidade','Ponto Focal','Andamento','SAVAL','Data envio','Prof. PD','Mon. PD','Aux. PD','Viat. PD','Prof. PA','Mon. PA','Aux. PA','Viat. PA']];
+  const body = rows.map(r => [
+    r.turma, r.codigo, r.mod, r.unid, r.ponto_focal || '-', r.andamento || 'Pendente',
+    r.enviado ? 'Enviado' : 'Pendente', r.saval || '-',
+    r.prof_pd || 0, r.mon_pd || 0, r.aux_pd || 0, r.viat_pd || 0,
+    r.prof_pa || 0, r.mon_pa || 0, r.aux_pa || 0, r.viat_pa || 0
+  ]);
+
+  doc.autoTable({
+    head, body, startY: 60,
+    styles: { fontSize: 7, cellPadding: 3 },
+    headStyles: { fillColor: [15, 23, 42] },
+    theme: 'grid'
+  });
+
+  doc.save(`relatorio-planos-${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
 function writeCell(ws, addr, val) {
