@@ -107,7 +107,7 @@
       <button class="secondary" onclick="gerarRelatorioPDF()">Gerar relatório PDF</button>
     </div>
   </section>
-  <div class="small">Clique em qualquer célula editável (Ponto Focal, Data envio, Prof/Mon/Aux/Viat PD e PA) para alterar o valor. O botão "Salvar no GitHub" grava as alterações direto no arquivo Excel do repositório. O botão "Gerar relatório PDF" exporta a tabela "Relação dos planos" considerando os filtros aplicados no momento.</div>
+  <div class="small">Clique em qualquer célula editável (Ponto Focal, Nº Despacho, Data envio, Prof/Mon/Aux/Viat PD e PA) para alterar o valor. O botão "Salvar no GitHub" grava as alterações direto no arquivo Excel do repositório. O botão "Gerar relatório PDF" exporta a tabela "Relação dos planos" considerando os filtros aplicados no momento.</div>
 
   <section class="kpis">
     <div class="kpi"><div class="t">Total de planos</div><div class="n" id="kTotal">0</div></div>
@@ -135,7 +135,7 @@
       <table>
         <thead>
           <tr>
-            <th>Turma</th><th>Plano</th><th>Módulo</th><th>Unidade</th><th>Ponto Focal</th><th>Andamento</th><th>SAVAL</th><th>Data envio</th>
+            <th>Turma</th><th>Plano</th><th>Módulo</th><th>Unidade</th><th>Ponto Focal</th><th>Andamento</th><th>Nº Despacho</th><th>SAVAL</th><th>Data envio</th>
             <th style="color:#38bdf8">Prof. PD</th><th style="color:#38bdf8">Mon. PD</th><th style="color:#38bdf8">Aux. PD</th><th style="color:#38bdf8">Viat. PD</th>
             <th style="color:#22c55e">Prof. PA</th><th style="color:#22c55e">Mon. PA</th><th style="color:#22c55e">Aux. PA</th><th style="color:#22c55e">Viat. PA</th>
           </tr>
@@ -155,8 +155,9 @@ const TURMAS = ['EPF','DPF','PPF','PCF'];
 const GITHUB_OWNER = 'marcelmfpm-ai';
 const GITHUB_REPO = 'PLANO-DE-AULA-SAVAL';
 const GITHUB_BRANCH = 'main';
-const COLS = { ponto_focal:3, prof_pd:4, mon_pd:5, aux_pd:6, viat_pd:7, prof_pa:8, mon_pa:9, aux_pa:10, viat_pa:11, saval:12, andamento:16 };
+const COLS = { ponto_focal:3, prof_pd:4, mon_pd:5, aux_pd:6, viat_pd:7, prof_pa:8, mon_pa:9, aux_pa:10, viat_pa:11, saval:12, andamento:16, despacho:17 };
 const ANDAMENTO_COL = 16;
+const DESPACHO_COL = 17;
 const ANDAMENTO_OPTIONS = ['Pendente','Revisado para envio','Enviado','Sem plano de aula'];
 
 function cell(row, i) { return row && row[i] !== undefined && row[i] !== null ? String(row[i]).trim() : ''; }
@@ -242,6 +243,7 @@ async function loadExcel() {
           fim: cell(row,14),
           obs: cell(row,15),
           andamento: cell(row,16) || 'Pendente',
+          despacho: cell(row,17),
           enviado: saval !== ''
         });
       });
@@ -323,6 +325,7 @@ function renderTable(rows) {
     <td>${r.unid}</td>
     <td>${editable(r.id,'ponto_focal', r.ponto_focal || '-')}</td>
     <td>${andamentoSelect(r.id, r.andamento)}</td>
+    <td>${editable(r.id,'despacho', r.despacho || '-')}</td>
     <td id="tag-${r.id}">${r.enviado ? '<span class="tag ok">Enviado</span>' : '<span class="tag no">Pendente</span>'}</td>
     <td>${editable(r.id,'saval', r.saval || '-')}</td>
     <td>${editable(r.id,'prof_pd', r.prof_pd || 0)}</td>
@@ -408,9 +411,9 @@ function gerarRelatorioPDF() {
   doc.setFontSize(9);
   doc.text(`Relatório gerado em ${dataGeracao} — ${rows.length} plano(s) (respeitando os filtros aplicados)`, 40, 48);
 
-  const head = [['Turma','Plano','Módulo','Unidade','Ponto Focal','Andamento','SAVAL','Data envio','Prof. PD','Mon. PD','Aux. PD','Viat. PD','Prof. PA','Mon. PA','Aux. PA','Viat. PA']];
+  const head = [['Turma','Plano','Módulo','Unidade','Ponto Focal','Andamento','Nº Despacho','SAVAL','Data envio','Prof. PD','Mon. PD','Aux. PD','Viat. PD','Prof. PA','Mon. PA','Aux. PA','Viat. PA']];
   const body = rows.map(r => [
-    r.turma, r.codigo, r.mod, r.unid, r.ponto_focal || '-', r.andamento || 'Pendente',
+    r.turma, r.codigo, r.mod, r.unid, r.ponto_focal || '-', r.andamento || 'Pendente', r.despacho || '-',
     r.enviado ? 'Enviado' : 'Pendente', r.saval || '-',
     r.prof_pd || 0, r.mon_pd || 0, r.aux_pd || 0, r.viat_pd || 0,
     r.prof_pa || 0, r.mon_pa || 0, r.aux_pa || 0, r.viat_pa || 0
@@ -435,17 +438,21 @@ function writeCell(ws, addr, val) {
     ws[addr] = { t:'s', v:str };
   }
 }
-function ensureAndamentoColumn(ws) {
+function ensureColumn(ws, col, header) {
   const range = XLSX.utils.decode_range(ws['!ref']);
-  if (range.e.c < ANDAMENTO_COL) {
-    range.e.c = ANDAMENTO_COL;
+  if (range.e.c < col) {
+    range.e.c = col;
     ws['!ref'] = XLSX.utils.encode_range(range);
   }
-  const headerAddr = XLSX.utils.encode_cell({ r:range.s.r, c:ANDAMENTO_COL });
-  if (!ws[headerAddr]) ws[headerAddr] = { t:'s', v:'ANDAMENTO' };
+  const headerAddr = XLSX.utils.encode_cell({ r:range.s.r, c:col });
+  if (!ws[headerAddr]) ws[headerAddr] = { t:'s', v:header };
 }
 function aplicarEdicoesNoWorkbook() {
-  unique(DATA.map(r => r.sheetName)).forEach(sheetName => ensureAndamentoColumn(workbook.Sheets[sheetName]));
+  unique(DATA.map(r => r.sheetName)).forEach(sheetName => {
+    const ws = workbook.Sheets[sheetName];
+    ensureColumn(ws, ANDAMENTO_COL, 'ANDAMENTO');
+    ensureColumn(ws, DESPACHO_COL, 'DESPACHO');
+  });
   DATA.forEach(r => {
     const ws = workbook.Sheets[r.sheetName];
     Object.entries(COLS).forEach(([field, col]) => {
